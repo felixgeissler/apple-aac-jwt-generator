@@ -1,8 +1,59 @@
-export function add(a: number, b: number): number {
-  return a + b;
+import * as jwt from "npm:jsonwebtoken";
+import * as chalk from "jsr:@nothing628/chalk";
+
+export async function generateJwtForAAC({
+  kid,
+  privateKeyPath,
+}: {
+  kid: string;
+  privateKeyPath: string;
+}): Promise<string> {
+  const header = {
+    alg: "ES256",
+    kid,
+    typ: "JWT",
+  };
+
+  const iat = Math.floor(Date.now() / 1000);
+  const exp = iat + 1200;
+  const payload = {
+    sub: "user",
+    iat,
+    exp,
+    aud: "appstoreconnect-v1",
+  };
+
+  const privateKey = await Deno.readFile(privateKeyPath);
+  const token = jwt.sign(payload, privateKey, {
+    algorithm: "ES256",
+    header,
+    allowInvalidAsymmetricKeyTypes: true,
+  });
+
+  return token;
 }
 
-// Learn more at https://docs.deno.com/runtime/manual/examples/module_metadata#concepts
 if (import.meta.main) {
-  console.log("Add 2 + 3 =", add(2, 3));
+  const [kid, privateKeyPath] = Deno.args;
+  if (!kid || !privateKeyPath) {
+    console.error("Usage: <kid> <privateKeyPath>");
+    Deno.exit(1);
+  }
+
+  try {
+    await Deno.stat(privateKeyPath);
+  } catch (e: unknown) {
+    if (e instanceof Deno.errors.NotFound) {
+      console.error(
+        chalk.default.red(`Error: Private key not found at ${privateKeyPath}`),
+      );
+      Deno.exit(1);
+    }
+    throw e;
+  }
+
+  const jwt = await generateJwtForAAC({ kid, privateKeyPath });
+
+  console.log("Generated JWT:");
+  console.log(chalk.default.green(jwt));
 }
